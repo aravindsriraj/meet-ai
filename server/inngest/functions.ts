@@ -37,7 +37,7 @@ export const processMeetingTranscripts = inngest.createFunction(
             meetingId,
             speaker: t.speaker,
             content: t.content,
-            timestamp: typeof t.timestamp === "number" ? t.timestamp : 0,
+            timestamp: typeof t.timestamp === "number" ? Math.floor(t.timestamp / 1000) : 0,
           }));
 
         if (validTranscripts.length === 0) {
@@ -156,14 +156,11 @@ export const setupAskAiChat = inngest.createFunction(
         });
 
         const channel = streamChat.channel("messaging", channelId, {
+          name: `Ask AI: ${meeting.name}`,
           created_by_id: "ai-assistant",
-        });
+        } as any);
 
         await channel.create();
-        
-        await channel.update({
-          name: `Ask AI: ${meeting.name}`,
-        } as any, { name: `Ask AI: ${meeting.name}` } as any);
         
         console.log(`Created Stream Chat channel ${channelId} for meeting ${meetingId}`);
         

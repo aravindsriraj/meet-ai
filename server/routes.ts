@@ -564,13 +564,12 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
         }
       }
 
-      // Create session configuration
+      // Create session configuration for WebRTC calls endpoint
       const sessionConfig = JSON.stringify({
         type: "realtime",
-        model: "gpt-realtime",
+        model: "gpt-4o-realtime-preview",
         instructions,
         voice,
-        input_audio_transcription: { model: "gpt-4o-transcribe" },
         turn_detection: { 
           type: "server_vad",
           threshold: 0.5,

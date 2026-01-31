@@ -86,6 +86,28 @@ The application uses these core entities:
 - `zod`: Runtime type validation
 - `express-session` / `connect-pg-simple`: Session management
 - `p-limit` / `p-retry`: Batch processing utilities for rate-limited API calls
+- `inngest`: Background job orchestration for post-call processing
+- `stream-chat` / `stream-chat-react`: Real-time chat for Ask AI feature
+
+### Background Job Processing (Inngest)
+Post-call processing runs as background jobs using Inngest for reliability and observability:
+- **Location**: `server/inngest/client.ts` (Inngest client) and `server/inngest/functions.ts` (job definitions)
+- **Endpoint**: `/api/inngest` - Express serve handler for Inngest
+- **Event**: `meeting/call.ended` triggers all post-call processing
+
+#### Inngest Functions
+1. **saveTranscripts**: Saves transcript data to database with speaker attribution and timestamps
+2. **generateSummary**: Uses OpenAI to create topic-based meeting summaries from transcripts
+3. **setupStreamChatChannel**: Creates Stream Chat channel for Ask AI feature
+4. **markMeetingCompleted**: Updates meeting status to "completed" after processing
+
+### Ask AI Chat (Stream Chat)
+Stream Chat SDK powers the intelligent Q&A interface for asking questions about meetings:
+- **Server SDK**: `stream-chat` - Creates channels and generates user tokens
+- **Client SDK**: `stream-chat-react` - Provides pre-built chat UI components
+- **Channel ID Format**: `meeting-{meetingId}`
+- **Token Endpoint**: `/api/stream-chat/token` - Generates user tokens for client authentication
+- **Environment Variables**: `STREAM_API_KEY`, `STREAM_API_SECRET`, `VITE_STREAM_API_KEY` (frontend)
 
 ### Replit Integrations
 Located in `server/replit_integrations/` and `client/replit_integrations/`:

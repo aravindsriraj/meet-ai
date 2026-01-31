@@ -48,6 +48,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { MeetingFull, MeetingStatus, Transcript, Summary, Conversation } from "@shared/schema";
+import { AskAIChat } from "@/components/ask-ai-chat";
 
 function getStatusBadgeStyles(status: MeetingStatus) {
   switch (status) {
@@ -753,6 +754,10 @@ export default function MeetingDetail() {
               <MessageSquare className="mr-1 h-4 w-4" />
               Q&A
             </TabsTrigger>
+            <TabsTrigger value="ask-ai" data-testid="tab-ask-ai">
+              <Bot className="mr-1 h-4 w-4" />
+              Ask AI
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="summary" className="mt-4">
@@ -769,6 +774,10 @@ export default function MeetingDetail() {
 
           <TabsContent value="qa" className="mt-4">
             <QAView meetingId={meeting.id} />
+          </TabsContent>
+
+          <TabsContent value="ask-ai" className="mt-4">
+            <AskAIChat meetingId={meeting.id} meetingName={meeting.name} />
           </TabsContent>
         </Tabs>
       ) : (

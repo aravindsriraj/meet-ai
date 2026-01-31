@@ -1,12 +1,18 @@
 import express, { type Express, type Request, type Response } from "express";
 import { createServer, type Server } from "http";
 import { serve } from "inngest/express";
+import { StreamChat } from "stream-chat";
 import { storage } from "./storage";
 import { insertAgentSchema, insertMeetingSchema } from "@shared/schema";
 import { z } from "zod";
 import OpenAI from "openai";
 import { inngest } from "./inngest/client";
 import { allFunctions } from "./inngest/functions";
+
+const streamChat = StreamChat.getInstance(
+  process.env.STREAM_API_KEY!,
+  process.env.STREAM_API_SECRET!
+);
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -494,6 +500,45 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
     } catch (error) {
       console.error("Error triggering meeting processing:", error);
       res.status(500).json({ error: "Failed to start meeting processing" });
+    }
+  });
+
+  // =====================
+  // STREAM CHAT TOKEN
+  // =====================
+
+  app.post("/api/stream-chat/token", async (req: Request, res: Response) => {
+    try {
+      const { meetingId, displayName } = req.body;
+      
+      if (!meetingId || typeof meetingId !== "number") {
+        return res.status(400).json({ error: "meetingId is required and must be a number" });
+      }
+
+      const meeting = await storage.getMeeting(meetingId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+
+      if (meeting.status !== "completed") {
+        return res.status(400).json({ error: "Ask AI is only available for completed meetings" });
+      }
+
+      const userId = `participant-m${meetingId}-${Date.now()}`;
+      const userName = displayName || "Meeting Participant";
+
+      await streamChat.upsertUser({
+        id: userId,
+        name: userName,
+        role: "user",
+      });
+
+      const token = streamChat.createToken(userId);
+      
+      res.json({ token, userId, channelId: `meeting-${meetingId}` });
+    } catch (error) {
+      console.error("Error creating Stream Chat token:", error);
+      res.status(500).json({ error: "Failed to create chat token" });
     }
   });
 

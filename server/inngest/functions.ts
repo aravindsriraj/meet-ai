@@ -14,49 +14,78 @@ const streamChat = StreamChat.getInstance(
 );
 
 export const processMeetingTranscripts = inngest.createFunction(
-  { id: "process-meeting-transcripts", name: "Save Meeting Transcripts" },
+  { id: "process-meeting-transcripts", name: "Save Meeting Transcripts", retries: 3 },
   { event: "meeting/call.ended" },
   async ({ event, step }) => {
     const { meetingId, transcriptData } = event.data;
 
-    await step.run("save-transcripts", async () => {
-      if (transcriptData && Array.isArray(transcriptData) && transcriptData.length > 0) {
-        await storage.createTranscripts(transcriptData.map((t: any) => ({
-          meetingId,
-          speaker: t.speaker,
-          content: t.content,
-          timestamp: t.timestamp,
-        })));
-        console.log(`Saved ${transcriptData.length} transcripts for meeting ${meetingId}`);
+    if (!meetingId || typeof meetingId !== "number") {
+      console.error("Invalid meetingId in event data");
+      return { success: false, error: "Invalid meetingId" };
+    }
+
+    const savedCount = await step.run("save-transcripts", async () => {
+      try {
+        if (!transcriptData || !Array.isArray(transcriptData) || transcriptData.length === 0) {
+          console.log(`No transcript data for meeting ${meetingId}`);
+          return 0;
+        }
+
+        const validTranscripts = transcriptData
+          .filter((t: any) => t && typeof t.speaker === "string" && typeof t.content === "string")
+          .map((t: any) => ({
+            meetingId,
+            speaker: t.speaker,
+            content: t.content,
+            timestamp: typeof t.timestamp === "number" ? t.timestamp : 0,
+          }));
+
+        if (validTranscripts.length === 0) {
+          console.log(`No valid transcripts for meeting ${meetingId}`);
+          return 0;
+        }
+
+        await storage.createTranscripts(validTranscripts);
+        console.log(`Saved ${validTranscripts.length} transcripts for meeting ${meetingId}`);
+        return validTranscripts.length;
+      } catch (error) {
+        console.error(`Failed to save transcripts for meeting ${meetingId}:`, error);
+        throw error;
       }
     });
 
-    return { success: true, transcriptCount: transcriptData?.length || 0 };
+    return { success: true, transcriptCount: savedCount };
   }
 );
 
 export const generateMeetingSummary = inngest.createFunction(
-  { id: "generate-meeting-summary", name: "Generate Meeting Summary" },
+  { id: "generate-meeting-summary", name: "Generate Meeting Summary", retries: 2 },
   { event: "meeting/call.ended" },
   async ({ event, step }) => {
     const { meetingId } = event.data;
 
-    const summaries = await step.run("generate-summary", async () => {
-      const transcripts = await storage.getTranscriptsByMeeting(meetingId);
-      
-      if (transcripts.length === 0) {
-        console.log(`No transcripts found for meeting ${meetingId}, skipping summary`);
-        return [];
-      }
+    if (!meetingId || typeof meetingId !== "number") {
+      console.error("Invalid meetingId in event data");
+      return { success: false, error: "Invalid meetingId" };
+    }
 
-      const transcriptText = transcripts.map(t => `[${t.speaker}]: ${t.content}`).join("\n");
-      
-      const summaryResponse = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert meeting summarizer. Create a comprehensive, detailed summary of the meeting organized by topics.
+    const summaries = await step.run("generate-summary", async () => {
+      try {
+        const transcripts = await storage.getTranscriptsByMeeting(meetingId);
+        
+        if (transcripts.length === 0) {
+          console.log(`No transcripts found for meeting ${meetingId}, skipping summary`);
+          return [];
+        }
+
+        const transcriptText = transcripts.map(t => `[${t.speaker}]: ${t.content}`).join("\n");
+        
+        const summaryResponse = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert meeting summarizer. Create a comprehensive, detailed summary of the meeting organized by topics.
 
 Return a JSON object with a "topics" array, where each topic has:
 - "topic": A clear, concise topic title
@@ -64,18 +93,17 @@ Return a JSON object with a "topics" array, where each topic has:
 - "keyPoints": An array of key takeaways from this topic
 
 Be thorough and capture all important discussions, decisions, and action items.`,
-          },
-          {
-            role: "user",
-            content: `Create a detailed summary of this meeting transcript:\n\n${transcriptText}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 4096,
-      });
+            },
+            {
+              role: "user",
+              content: `Create a detailed summary of this meeting transcript:\n\n${transcriptText}`,
+            },
+          ],
+          response_format: { type: "json_object" },
+          max_tokens: 4096,
+        });
 
-      const summaryContent = summaryResponse.choices[0]?.message?.content || "{}";
-      try {
+        const summaryContent = summaryResponse.choices[0]?.message?.content || "{}";
         const parsed = JSON.parse(summaryContent);
         const topics = parsed.topics || parsed.summaries || [parsed];
         
@@ -90,9 +118,9 @@ Be thorough and capture all important discussions, decisions, and action items.`
         await storage.createSummaries(summaryData);
         console.log(`Created ${summaryData.length} summaries for meeting ${meetingId}`);
         return summaryData;
-      } catch (e) {
-        console.error("Failed to parse summary response:", e);
-        return [];
+      } catch (error) {
+        console.error(`Failed to generate summary for meeting ${meetingId}:`, error);
+        throw error;
       }
     });
 
@@ -101,14 +129,20 @@ Be thorough and capture all important discussions, decisions, and action items.`
 );
 
 export const setupAskAiChat = inngest.createFunction(
-  { id: "setup-ask-ai-chat", name: "Setup Ask AI Chat Channel" },
+  { id: "setup-ask-ai-chat", name: "Setup Ask AI Chat Channel", retries: 2 },
   { event: "meeting/call.ended" },
   async ({ event, step }) => {
     const { meetingId } = event.data;
 
+    if (!meetingId || typeof meetingId !== "number") {
+      console.error("Invalid meetingId in event data");
+      return { success: false, error: "Invalid meetingId" };
+    }
+
     const channelId = await step.run("create-stream-channel", async () => {
       const meeting = await storage.getMeeting(meetingId);
       if (!meeting) {
+        console.error(`Meeting ${meetingId} not found`);
         throw new Error(`Meeting ${meetingId} not found`);
       }
 
@@ -148,16 +182,26 @@ export const setupAskAiChat = inngest.createFunction(
 );
 
 export const completeMeetingProcessing = inngest.createFunction(
-  { id: "complete-meeting-processing", name: "Complete Meeting Processing" },
+  { id: "complete-meeting-processing", name: "Complete Meeting Processing", retries: 2 },
   { event: "meeting/call.ended" },
   async ({ event, step }) => {
     const { meetingId } = event.data;
 
+    if (!meetingId || typeof meetingId !== "number") {
+      console.error("Invalid meetingId in event data");
+      return { success: false, error: "Invalid meetingId" };
+    }
+
     await step.sleep("wait-for-processing", "5s");
 
     await step.run("mark-completed", async () => {
-      await storage.updateMeetingStatus(meetingId, "completed");
-      console.log(`Meeting ${meetingId} marked as completed`);
+      try {
+        await storage.updateMeetingStatus(meetingId, "completed");
+        console.log(`Meeting ${meetingId} marked as completed`);
+      } catch (error) {
+        console.error(`Failed to mark meeting ${meetingId} as completed:`, error);
+        throw error;
+      }
     });
 
     return { success: true, meetingId };

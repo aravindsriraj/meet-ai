@@ -69,9 +69,22 @@ export function useAudioPlayback(workletPath = "/audio-playback-worklet.js") {
     readyRef.current = true;
   }, [workletPath]);
 
+  /** Ensure AudioContext is running (resume if suspended) */
+  const ensureResumed = useCallback(async () => {
+    if (ctxRef.current && ctxRef.current.state === "suspended") {
+      await ctxRef.current.resume();
+    }
+  }, []);
+
   /** Push audio directly (no sequencing) - for simple streaming */
-  const pushAudio = useCallback((base64Audio: string) => {
-    if (!workletRef.current) return;
+  const pushAudio = useCallback(async (base64Audio: string) => {
+    if (!workletRef.current || !ctxRef.current) return;
+    
+    // Resume AudioContext if suspended (browser autoplay policy)
+    if (ctxRef.current.state === "suspended") {
+      await ctxRef.current.resume();
+    }
+    
     const samples = decodePCM16ToFloat32(base64Audio);
     workletRef.current.port.postMessage({ type: "audio", samples });
     setState("playing");
@@ -101,5 +114,5 @@ export function useAudioPlayback(workletPath = "/audio-playback-worklet.js") {
     setState("idle");
   }, []);
 
-  return { state, init, pushAudio, pushSequencedAudio, signalComplete, clear };
+  return { state, init, ensureResumed, pushAudio, pushSequencedAudio, signalComplete, clear };
 }

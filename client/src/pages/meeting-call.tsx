@@ -165,6 +165,8 @@ export default function MeetingCall() {
     if (isRecording) return;
     setIsRecording(true);
     audioPlayback.clear();
+    // Ensure AudioContext is resumed on user interaction (browser autoplay policy)
+    await audioPlayback.ensureResumed();
     try {
       await recorder.startRecording();
     } catch (err) {
@@ -220,7 +222,7 @@ export default function MeetingCall() {
                     fullAiTranscript += data.data;
                     setCurrentAiText(fullAiTranscript);
                   } else if (data.type === "audio") {
-                    audioPlayback.pushAudio(data.data);
+                    await audioPlayback.pushAudio(data.data);
                   } else if (data.type === "done") {
                     if (fullAiTranscript) {
                       addTranscriptMessage("ai", fullAiTranscript);

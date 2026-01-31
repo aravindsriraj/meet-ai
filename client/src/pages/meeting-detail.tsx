@@ -48,7 +48,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { MeetingFull, MeetingStatus, Transcript, Summary, Conversation } from "@shared/schema";
-import { AskAIChat } from "@/components/ask-ai-chat";
 
 function getStatusBadgeStyles(status: MeetingStatus) {
   switch (status) {
@@ -443,13 +442,13 @@ function QAView({ meetingId }: { meetingId: number }) {
   const createConversation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/meetings/${meetingId}/conversations`, {
-        title: `Q&A Session - ${format(new Date(), "PPp")}`,
+        title: `Ask AI - ${format(new Date(), "PPp")}`,
       });
       return res.json();
     },
     onSuccess: (conversation) => {
       queryClient.invalidateQueries({ queryKey: ["/api/meetings", meetingId, "conversations"] });
-      toast({ title: "Q&A session started" });
+      toast({ title: "Ask AI session started" });
       navigate(`/meetings/${meetingId}/qa/${conversation.id}`);
     },
     onError: (error) => {
@@ -463,22 +462,22 @@ function QAView({ meetingId }: { meetingId: number }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-medium">Q&A Sessions</h3>
+          <h3 className="font-medium">Ask AI Sessions</h3>
           <p className="text-sm text-muted-foreground">
-            Ask AI questions about the meeting content
+            Ask questions about the meeting content
           </p>
         </div>
         <Button
           onClick={() => createConversation.mutate()}
           disabled={createConversation.isPending}
-          data-testid="button-start-qa"
+          data-testid="button-start-ask-ai"
         >
           {createConversation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Plus className="h-4 w-4" />
           )}
-          Start New Q&A
+          Start New Session
         </Button>
       </div>
 
@@ -518,10 +517,10 @@ function QAView({ meetingId }: { meetingId: number }) {
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-          <MessageSquare className="h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 text-lg font-medium">No Q&A sessions yet</h3>
+          <Bot className="h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mt-4 text-lg font-medium">No sessions yet</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Start a Q&A session to ask AI about the meeting content.
+            Start a session to ask AI about the meeting content.
           </p>
         </div>
       )}
@@ -750,10 +749,6 @@ export default function MeetingDetail() {
               <Mic className="mr-1 h-4 w-4" />
               Recording
             </TabsTrigger>
-            <TabsTrigger value="qa" data-testid="tab-qa">
-              <MessageSquare className="mr-1 h-4 w-4" />
-              Q&A
-            </TabsTrigger>
             <TabsTrigger value="ask-ai" data-testid="tab-ask-ai">
               <Bot className="mr-1 h-4 w-4" />
               Ask AI
@@ -772,12 +767,8 @@ export default function MeetingDetail() {
             <RecordingPlayer recordingUrl={meeting.recordingUrl} />
           </TabsContent>
 
-          <TabsContent value="qa" className="mt-4">
-            <QAView meetingId={meeting.id} />
-          </TabsContent>
-
           <TabsContent value="ask-ai" className="mt-4">
-            <AskAIChat meetingId={meeting.id} meetingName={meeting.name} />
+            <QAView meetingId={meeting.id} />
           </TabsContent>
         </Tabs>
       ) : (

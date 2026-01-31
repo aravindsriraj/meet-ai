@@ -63,10 +63,9 @@ Access your completed meetings to:
 - **Inngest** for background job orchestration
 
 ### AI & Real-time
-- **OpenAI Realtime API** with WebRTC for voice conversations
+- **OpenAI Realtime API** with WebRTC for voice conversations (includes live transcription)
 - **OpenAI GPT-4** for summaries and Ask AI responses
-- **OpenAI Whisper** for speech-to-text transcription
-- **OpenAI Image Generation** for agent avatars
+- **OpenAI gpt-image-1** for AI-generated agent avatars
 
 ### External Services
 - **Neon** (or any PostgreSQL provider) for database hosting

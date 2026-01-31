@@ -1,9 +1,12 @@
 import express, { type Express, type Request, type Response } from "express";
 import { createServer, type Server } from "http";
+import { serve } from "inngest/express";
 import { storage } from "./storage";
 import { insertAgentSchema, insertMeetingSchema } from "@shared/schema";
 import { z } from "zod";
 import OpenAI from "openai";
+import { inngest } from "./inngest/client";
+import { allFunctions } from "./inngest/functions";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -15,6 +18,12 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // =====================
+  // INNGEST HANDLER
+  // =====================
+  
+  app.use("/api/inngest", serve({ client: inngest, functions: allFunctions }));
+
   // =====================
   // AGENTS ROUTES
   // =====================
@@ -463,7 +472,7 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
   });
 
   // =====================
-  // PROCESSING ROUTES (Generate summaries and transcripts)
+  // PROCESSING ROUTES (Trigger Inngest background jobs)
   // =====================
   
   app.post("/api/meetings/:id/process", async (req: Request, res: Response) => {
@@ -471,71 +480,20 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
       const meetingId = parseInt(req.params.id);
       const { transcriptData } = req.body;
 
-      // Save transcripts if provided
-      if (transcriptData && Array.isArray(transcriptData)) {
-        await storage.createTranscripts(transcriptData.map((t: any) => ({
+      // Send event to Inngest to trigger background processing
+      await inngest.send({
+        name: "meeting/call.ended",
+        data: {
           meetingId,
-          speaker: t.speaker,
-          content: t.content,
-          timestamp: t.timestamp,
-        })));
-      }
+          transcriptData: transcriptData || [],
+        },
+      });
 
-      // Get all transcripts for the meeting
-      const transcripts = await storage.getTranscriptsByMeeting(meetingId);
-      
-      if (transcripts.length > 0) {
-        // Generate AI summary
-        const transcriptText = transcripts.map(t => `[${t.speaker}]: ${t.content}`).join("\n");
-        
-        const summaryResponse = await openai.chat.completions.create({
-          model: "gpt-5.2",
-          messages: [
-            {
-              role: "system",
-              content: "You are an expert at summarizing meeting discussions. Create a structured summary organized by topics. Return JSON array with objects containing 'topic' and 'content' fields.",
-            },
-            {
-              role: "user",
-              content: `Summarize this meeting transcript into key topics:\n\n${transcriptText}`,
-            },
-          ],
-          response_format: { type: "json_object" },
-          max_completion_tokens: 2048,
-        });
-
-        const summaryContent = summaryResponse.choices[0]?.message?.content || "{}";
-        try {
-          const parsed = JSON.parse(summaryContent);
-          const topics = parsed.topics || parsed.summaries || [parsed];
-          
-          await storage.createSummaries(
-            (Array.isArray(topics) ? topics : [topics]).map((s: any, i: number) => ({
-              meetingId,
-              topic: s.topic || `Topic ${i + 1}`,
-              content: s.content || s.summary || "",
-              startTimestamp: s.startTimestamp || null,
-              endTimestamp: s.endTimestamp || null,
-            }))
-          );
-        } catch {
-          await storage.createSummary({
-            meetingId,
-            topic: "Meeting Summary",
-            content: summaryContent,
-            startTimestamp: null,
-            endTimestamp: null,
-          });
-        }
-      }
-
-      // Mark meeting as completed
-      const meeting = await storage.updateMeetingStatus(meetingId, "completed");
-      
-      res.json({ success: true, meeting });
+      console.log(`Triggered background processing for meeting ${meetingId}`);
+      res.json({ success: true, message: "Processing started in background" });
     } catch (error) {
-      console.error("Error processing meeting:", error);
-      res.status(500).json({ error: "Failed to process meeting" });
+      console.error("Error triggering meeting processing:", error);
+      res.status(500).json({ error: "Failed to start meeting processing" });
     }
   });
 

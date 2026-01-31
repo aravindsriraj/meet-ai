@@ -54,13 +54,21 @@ export const processMeetingTranscripts = inngest.createFunction(
       }
     });
 
+    // Trigger summary generation after transcripts are saved
+    if (savedCount > 0) {
+      await step.sendEvent("trigger-summary", {
+        name: "meeting/transcripts.saved",
+        data: { meetingId },
+      });
+    }
+
     return { success: true, transcriptCount: savedCount };
   }
 );
 
 export const generateMeetingSummary = inngest.createFunction(
   { id: "generate-meeting-summary", name: "Generate Meeting Summary", retries: 2 },
-  { event: "meeting/call.ended" },
+  { event: "meeting/transcripts.saved" },
   async ({ event, step }) => {
     const { meetingId } = event.data;
 

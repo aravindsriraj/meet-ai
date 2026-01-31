@@ -553,7 +553,7 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
       }
 
       // Get agent configuration if provided
-      let instructions = "You are a helpful AI assistant participating in a video call. Be conversational and natural.";
+      let instructions = "You are a helpful AI assistant participating in a video call. Be conversational and natural. Always respond in English unless the user specifically asks you to speak another language.";
       let voice = "alloy";
       
       if (agentId) {

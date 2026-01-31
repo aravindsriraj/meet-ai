@@ -584,11 +584,11 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
       formData.set("sdp", sdpOffer);
       formData.set("session", sessionConfig);
 
-      // Call OpenAI Realtime API
+      // Call OpenAI Realtime API (requires user's own API key, not AI integrations)
       const response = await fetch("https://api.openai.com/v1/realtime/calls", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.AI_INTEGRATIONS_OPENAI_API_KEY}`,
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: formData,
       });

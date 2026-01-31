@@ -226,43 +226,41 @@ export function CreateAgentDialog({ open, onOpenChange }: CreateAgentDialogProps
                       type="button"
                       size="icon"
                       variant="secondary"
-                      className="absolute -top-1 -right-1 h-6 w-6 rounded-full"
+                      className="absolute -top-1 -right-1 rounded-full"
                       onClick={handleRemoveAvatar}
                       data-testid="button-remove-avatar"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
                 <div className="flex gap-1">
                   <Button
                     type="button"
-                    size="sm"
+                    size="icon"
                     variant="outline"
-                    className="h-7 text-xs"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploadingAvatar || isGeneratingAvatar}
                     data-testid="button-upload-avatar"
                   >
                     {isUploadingAvatar ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Upload className="h-3 w-3" />
+                      <Upload className="h-4 w-4" />
                     )}
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
+                    size="icon"
                     variant="outline"
-                    className="h-7 text-xs"
                     onClick={handleGenerateAvatar}
                     disabled={isGeneratingAvatar || isUploadingAvatar}
                     data-testid="button-generate-avatar"
                   >
                     {isGeneratingAvatar ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Sparkles className="h-3 w-3" />
+                      <Sparkles className="h-4 w-4" />
                     )}
                   </Button>
                 </div>

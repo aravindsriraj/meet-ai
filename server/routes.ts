@@ -565,16 +565,14 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
       }
 
       // Create session configuration for WebRTC calls endpoint
+      // Per OpenAI docs: only type, model, instructions, and audio config are allowed here
+      // Turn detection and other settings must be configured via session.update after connection
       const sessionConfig = JSON.stringify({
         type: "realtime",
         model: "gpt-4o-realtime-preview",
         instructions,
-        voice,
-        turn_detection: { 
-          type: "server_vad",
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500
+        audio: { 
+          output: { voice } 
         }
       });
 

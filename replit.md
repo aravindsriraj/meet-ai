@@ -4,6 +4,8 @@
 
 Meet AI is a full-stack, AI-powered video call application that enables users to create and manage video meetings with custom AI agents. The application features live AI participation during calls, automatic post-call processing (transcripts, summaries), and an intelligent Q&A interface for querying meeting content.
 
+**Current Status**: MVP Complete - All core features implemented and tested.
+
 Key capabilities:
 - Create and configure custom AI agents with specific roles (e.g., language tutor, interview coach)
 - Real-time video calls with AI agent participation via OpenAI Realtime API

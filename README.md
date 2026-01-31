@@ -68,9 +68,6 @@ Access completed meetings to:
 ### Background Jobs
 - Inngest (event-driven job orchestration)
 
-### Storage
-- Replit Object Storage (agent avatars)
-
 ## Local Setup
 
 ### Prerequisites
@@ -92,8 +89,13 @@ npm install
 Create a `.env` file:
 
 ```env
-# Database
-DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+# Database (Neon PostgreSQL)
+DATABASE_URL=postgresql://user:password@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
+PGHOST=ep-xxx.region.aws.neon.tech
+PGDATABASE=dbname
+PGUSER=user
+PGPASSWORD=password
+PGPORT=5432
 
 # OpenAI
 OPENAI_API_KEY=sk-your-openai-api-key
@@ -105,6 +107,8 @@ INNGEST_SIGNING_KEY=your-inngest-signing-key
 # Session
 SESSION_SECRET=random-secret-string
 ```
+
+> **Note:** Avatar upload/generation features require object storage configuration. For local development, you can skip avatar features or configure your own S3-compatible storage.
 
 ### 3. Set Up Database
 

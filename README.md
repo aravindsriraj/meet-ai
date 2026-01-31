@@ -1,10 +1,13 @@
 # Meet AI
 
 An AI-powered video meeting application where you can have real-time voice conversations with custom AI agents.
+<img width="1904" height="844" alt="image" src="https://github.com/user-attachments/assets/1f143e13-5a4a-43c9-ba6d-85fa8c9a7132" />
 
 ## Introduction
 
 Meet AI lets you create personalized AI agents and have natural voice conversations with them in a video call interface. Each agent can be customized with specific instructions, personality, and voice.
+<img width="1904" height="844" alt="image" src="https://github.com/user-attachments/assets/e1b59259-8d47-4196-b0d0-fd9ee909dcc3" />
+
 
 **Features:**
 - Create custom AI agents with unique instructions and voice
@@ -23,8 +26,12 @@ Define your agent with:
 - **Voice** - Choose from: alloy, ash, ballad, coral, echo, sage, shimmer, verse
 - **Avatar** - Upload an image or generate one with AI
 
+<img width="1904" height="844" alt="image" src="https://github.com/user-attachments/assets/3d160b4b-91c4-4b8b-9ef3-090ae8a0e607" />
+
 ### 2. Start a Meeting
 Create a meeting and select which agent to talk with.
+<img width="1289" height="664" alt="image" src="https://github.com/user-attachments/assets/207bb039-ae24-47af-8d1d-6825ec593053" />
+
 
 ### 3. Voice Conversation
 During the call:
@@ -32,11 +39,16 @@ During the call:
 - The AI responds in real-time with the selected voice
 - Live transcription shows the conversation as it happens
 - Interrupt the AI anytime
+  <img width="1659" height="863" alt="image" src="https://github.com/user-attachments/assets/f078be91-9af5-4784-bb85-fb5eb1e1d9a0" />
+
 
 ### 4. Post-Call Processing
 After ending the call, Inngest background jobs automatically:
 - Save the transcript with speaker labels and timestamps
 - Generate a topic-based summary using GPT-4o
+
+<img width="1659" height="863" alt="image" src="https://github.com/user-attachments/assets/4efa024d-5b31-4494-987f-bf0cf87e7c74" />
+
 
 ### 5. Review Meeting
 Access completed meetings to:

@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Video, Bot, CheckCircle, Plus, Calendar, Clock } from "lucide-react";
 import { Link } from "wouter";
+import { useState } from "react";
+import { CreateMeetingDialog } from "@/components/create-meeting-dialog";
 
 const stats = [
   {
@@ -77,6 +79,8 @@ function getStatusBadgeVariant(status: string) {
 }
 
 export default function Dashboard() {
+  const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
@@ -89,13 +93,11 @@ export default function Dashboard() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Link href="/meetings/new">
-          <Button data-testid="button-new-meeting">
-            <Plus className="h-4 w-4" />
-            New Meeting
-          </Button>
-        </Link>
-        <Link href="/agents/new">
+        <Button data-testid="button-new-meeting" onClick={() => setMeetingDialogOpen(true)}>
+          <Plus className="h-4 w-4" />
+          New Meeting
+        </Button>
+        <Link href="/agents">
           <Button variant="outline" data-testid="button-create-agent">
             <Bot className="h-4 w-4" />
             Create Agent
@@ -159,6 +161,8 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <CreateMeetingDialog open={meetingDialogOpen} onOpenChange={setMeetingDialogOpen} />
     </div>
   );
 }

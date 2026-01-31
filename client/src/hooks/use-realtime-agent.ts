@@ -296,6 +296,18 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
       dc.onopen = () => {
         console.log("Data channel opened");
         setState(prev => ({ ...prev, isListening: true }));
+        
+        // Enable input audio transcription to get user speech-to-text
+        const sessionUpdate = {
+          type: "session.update",
+          session: {
+            input_audio_transcription: {
+              model: "gpt-4o-transcribe"
+            }
+          }
+        };
+        dc.send(JSON.stringify(sessionUpdate));
+        console.log("Sent session.update to enable transcription");
       };
 
       dc.onclose = () => {

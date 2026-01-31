@@ -542,6 +542,83 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
     }
   });
 
+  // Ask AI - Generate AI response about meeting content
+  app.post("/api/meetings/:id/ask-ai", async (req: Request, res: Response) => {
+    try {
+      const meetingId = parseInt(req.params.id as string);
+      const { question } = req.body;
+
+      if (!question || typeof question !== "string") {
+        return res.status(400).json({ error: "Question is required" });
+      }
+
+      const meeting = await storage.getMeeting(meetingId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+
+      if (meeting.status !== "completed") {
+        return res.status(400).json({ error: "Ask AI is only available for completed meetings" });
+      }
+
+      // Fetch transcripts and summaries for context
+      const transcripts = await storage.getTranscriptsByMeeting(meetingId);
+      const summaries = await storage.getSummariesByMeeting(meetingId);
+
+      // Build context from meeting content
+      let context = `Meeting: ${meeting.name}\n\n`;
+      
+      if (summaries.length > 0) {
+        context += "=== Meeting Summary ===\n";
+        summaries.forEach(s => {
+          context += `Topic: ${s.topic}\n${s.content}\n\n`;
+        });
+      }
+
+      if (transcripts.length > 0) {
+        context += "=== Meeting Transcript ===\n";
+        transcripts.forEach(t => {
+          context += `[${t.speaker}]: ${t.content}\n`;
+        });
+      }
+
+      if (transcripts.length === 0 && summaries.length === 0) {
+        return res.json({ 
+          answer: "I don't have any transcript or summary data for this meeting yet. Please ensure the meeting was processed after it ended." 
+        });
+      }
+
+      // Generate AI response using OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an AI assistant that helps users understand and find information from their meeting recordings. 
+You have access to the meeting transcript and summary below. 
+Answer the user's questions accurately based on this content.
+If the answer is not in the meeting content, say so honestly.
+Be concise but thorough.
+
+${context}`
+          },
+          {
+            role: "user",
+            content: question
+          }
+        ],
+        max_tokens: 1024,
+      });
+
+      const answer = completion.choices[0]?.message?.content || "I couldn't generate a response. Please try again.";
+      
+      res.json({ answer });
+    } catch (error) {
+      console.error("Error in Ask AI:", error);
+      res.status(500).json({ error: "Failed to generate AI response" });
+    }
+  });
+
   // =====================
   // REALTIME API SESSION (WebRTC)
   // =====================

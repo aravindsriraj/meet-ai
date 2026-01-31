@@ -114,6 +114,33 @@ export default function MeetingCall() {
   }, [meeting?.agentId, realtimeAgent.isConnected, realtimeAgent.isConnecting]);
 
   useEffect(() => {
+    if (!realtimeAgent.isConnected || realtimeAgent.isRecording) return;
+
+    let attempts = 0;
+    const maxAttempts = 20; // Max 10 seconds of retrying
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const attemptStart = () => {
+      if (cancelled || attempts >= maxAttempts) return;
+      
+      const success = realtimeAgent.startRecording();
+      if (!success && !cancelled) {
+        attempts++;
+        timerId = setTimeout(attemptStart, 500);
+      }
+    };
+
+    // Initial delay before first attempt
+    timerId = setTimeout(attemptStart, 1000);
+
+    return () => {
+      cancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [realtimeAgent.isConnected, realtimeAgent.isRecording]);
+
+  useEffect(() => {
     async function setupCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -192,6 +219,24 @@ export default function MeetingCall() {
         content: msg.content,
         timestamp: msg.timestamp.getTime(),
       }));
+    
+    // Stop recording and get the audio blob
+    let recordingBlob: Blob | null = null;
+    if (realtimeAgent.isRecording) {
+      recordingBlob = await realtimeAgent.stopRecording();
+      if (recordingBlob) {
+        console.log("Recording saved:", recordingBlob.size, "bytes");
+        // Create a download link for the recording (for now, client-side download)
+        const url = URL.createObjectURL(recordingBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `meeting-${id}-recording.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    }
     
     // Disconnect agent and stop video
     realtimeAgent.disconnect();

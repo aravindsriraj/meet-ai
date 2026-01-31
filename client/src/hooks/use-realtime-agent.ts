@@ -13,6 +13,7 @@ export interface RealtimeAgentState {
   isConnecting: boolean;
   isListening: boolean;
   isSpeaking: boolean;
+  isRecording: boolean;
   error: string | null;
   messages: RealtimeMessage[];
   connectionState: RTCPeerConnectionState | null;
@@ -32,6 +33,7 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
     isConnecting: false,
     isListening: false,
     isSpeaking: false,
+    isRecording: false,
     error: null,
     messages: [],
     connectionState: null,
@@ -41,6 +43,11 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const recordingReadyRef = useRef(false);
   const currentAssistantMessageIdRef = useRef<string | null>(null);
   const currentAssistantTextRef = useRef<string>("");
   const messageIdCounter = useRef(0);
@@ -204,7 +211,101 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
     }
   }, [addMessage, updateMessage, generateMessageId]);
 
+  const stopRecording = useCallback((): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") {
+        resolve(null);
+        return;
+      }
+
+      const recorder = mediaRecorderRef.current;
+      const mimeType = recorder.mimeType || "audio/webm";
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        recordedChunksRef.current = [];
+        setState(prev => ({ ...prev, isRecording: false }));
+        resolve(blob);
+      };
+
+      recorder.stop();
+    });
+  }, []);
+
+  const startRecording = useCallback(() => {
+    if (!localStreamRef.current || !remoteStreamRef.current) {
+      console.warn("Cannot start recording: streams not available");
+      recordingReadyRef.current = false;
+      return false;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      console.log("Recording already in progress");
+      return true;
+    }
+
+    try {
+      // Clean up previous audio context if any
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(console.error);
+      }
+
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const destination = audioContext.createMediaStreamDestination();
+
+      const localSource = audioContext.createMediaStreamSource(localStreamRef.current);
+      localSource.connect(destination);
+
+      const remoteSource = audioContext.createMediaStreamSource(remoteStreamRef.current);
+      remoteSource.connect(destination);
+
+      const mixedStream = destination.stream;
+      
+      // Try different MIME types for browser compatibility
+      let mimeType = "audio/webm;codecs=opus";
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = "audio/webm";
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = "audio/mp4";
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            console.warn("No supported audio MIME type found");
+            mimeType = "";
+          }
+        }
+      }
+
+      const recorder = new MediaRecorder(mixedStream, mimeType ? { mimeType } : undefined);
+
+      recordedChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start(1000);
+      setState(prev => ({ ...prev, isRecording: true }));
+      console.log("Recording started with MIME type:", mimeType || "default");
+      return true;
+    } catch (err) {
+      console.error("Failed to start recording:", err);
+      return false;
+    }
+  }, []);
+
   const cleanup = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(console.error);
+      audioContextRef.current = null;
+    }
+
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
       dataChannelRef.current = null;
@@ -225,6 +326,8 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
       audioElementRef.current = null;
     }
 
+    remoteStreamRef.current = null;
+    recordingReadyRef.current = false;
     currentAssistantMessageIdRef.current = null;
     currentAssistantTextRef.current = "";
   }, []);
@@ -284,6 +387,7 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
         console.log("Received remote track:", event.track.kind);
         if (audioElementRef.current && event.streams[0]) {
           audioElementRef.current.srcObject = event.streams[0];
+          remoteStreamRef.current = event.streams[0];
         }
       };
 
@@ -453,6 +557,7 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
       isConnecting: false,
       isListening: false,
       isSpeaking: false,
+      isRecording: false,
       error: null,
       messages: [],
       connectionState: null,
@@ -473,5 +578,7 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
     sendTextMessage,
     interrupt,
     setMuted,
+    startRecording,
+    stopRecording,
   };
 }

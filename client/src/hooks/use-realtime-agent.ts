@@ -296,19 +296,6 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
       dc.onopen = () => {
         console.log("Data channel opened");
         setState(prev => ({ ...prev, isListening: true }));
-        
-        // Configure session settings after connection is established
-        const sessionUpdateEvent = {
-          type: "session.update",
-          session: {
-            type: "realtime",
-            input_audio_transcription: {
-              model: "gpt-4o-transcribe"
-            }
-          }
-        };
-        dc.send(JSON.stringify(sessionUpdateEvent));
-        console.log("Sent session.update for transcription");
       };
 
       dc.onclose = () => {

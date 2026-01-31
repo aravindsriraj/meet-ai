@@ -54,7 +54,6 @@ Access your completed meetings to:
 - **shadcn/ui** component library (Radix UI primitives)
 - **TanStack Query** for server state management
 - **Wouter** for client-side routing
-- **Stream Chat React** for the Ask AI interface
 
 ### Backend
 - **Node.js** with Express.js
@@ -70,7 +69,6 @@ Access your completed meetings to:
 - **OpenAI Image Generation** for agent avatars
 
 ### External Services
-- **Stream Chat** for real-time Ask AI messaging
 - **Neon** (or any PostgreSQL provider) for database hosting
 - **Inngest Cloud** for production background jobs
 
@@ -80,7 +78,6 @@ Access your completed meetings to:
 - Node.js 18+ installed
 - A PostgreSQL database (we recommend [Neon](https://neon.tech) for easy setup)
 - OpenAI API key with access to Realtime API
-- Stream Chat account (free tier available)
 - Inngest account (free tier available)
 
 ### 1. Clone the Repository
@@ -106,15 +103,6 @@ DATABASE_URL=postgresql://username:password@your-neon-host.neon.tech/dbname?sslm
 
 # OpenAI (for Realtime API voice calls)
 OPENAI_API_KEY=sk-your-openai-api-key
-
-# OpenAI via Replit AI Integrations (for chat completions, summaries)
-AI_INTEGRATIONS_OPENAI_API_KEY=your-key
-AI_INTEGRATIONS_OPENAI_BASE_URL=https://api.openai.com/v1
-
-# Stream Chat (for Ask AI feature)
-STREAM_API_KEY=your-stream-api-key
-STREAM_API_SECRET=your-stream-api-secret
-VITE_STREAM_API_KEY=your-stream-api-key
 
 # Inngest (for background jobs)
 INNGEST_EVENT_KEY=your-inngest-event-key
@@ -182,7 +170,7 @@ meet-ai/
 | POST | `/api/meetings` | Create a new meeting |
 | POST | `/api/realtime/session` | Start WebRTC session with OpenAI |
 | POST | `/api/generate-avatar` | Generate AI avatar for agent |
-| GET | `/api/stream-chat/token` | Get Stream Chat auth token |
+| POST | `/api/meetings/:id/ask` | Ask AI questions about meeting content |
 
 ## License
 

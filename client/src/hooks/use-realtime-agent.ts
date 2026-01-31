@@ -301,6 +301,7 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
         const sessionUpdateEvent = {
           type: "session.update",
           session: {
+            type: "realtime",
             input_audio_transcription: {
               model: "gpt-4o-transcribe"
             }

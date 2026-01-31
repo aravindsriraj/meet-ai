@@ -1,60 +1,107 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Video,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Plus,
-  Calendar,
   Clock,
-  Bot,
+  Search,
   Play,
   XCircle,
-  Eye,
   Loader2,
   CalendarDays,
+  Video,
+  CheckCircle2,
+  Timer,
 } from "lucide-react";
 import { CreateMeetingDialog } from "@/components/create-meeting-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { MeetingWithAgent, MeetingStatus } from "@shared/schema";
-import { format } from "date-fns";
+import type { MeetingWithAgent, MeetingStatus, Agent } from "@shared/schema";
+import { format, formatDistanceStrict } from "date-fns";
 
-function getStatusBadgeStyles(status: MeetingStatus) {
-  switch (status) {
-    case "upcoming":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800";
-    case "active":
-      return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800";
-    case "processing":
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800";
-    case "completed":
-      return "bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-400 border-gray-200 dark:border-gray-700";
-    case "cancelled":
-      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800";
-    default:
-      return "";
-  }
+const statusConfig: Record<MeetingStatus, { label: string; color: string; dotColor: string }> = {
+  upcoming: { 
+    label: "Upcoming", 
+    color: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800",
+    dotColor: "bg-amber-500"
+  },
+  active: { 
+    label: "Active", 
+    color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800",
+    dotColor: "bg-blue-500"
+  },
+  processing: { 
+    label: "Processing", 
+    color: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800",
+    dotColor: "bg-purple-500"
+  },
+  completed: { 
+    label: "Completed", 
+    color: "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800",
+    dotColor: "bg-green-500"
+  },
+  cancelled: { 
+    label: "Cancelled", 
+    color: "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700",
+    dotColor: "bg-gray-400"
+  },
+};
+
+const agentColors = [
+  "bg-emerald-500",
+  "bg-blue-500",
+  "bg-purple-500",
+  "bg-pink-500",
+  "bg-orange-500",
+  "bg-cyan-500",
+  "bg-rose-500",
+  "bg-indigo-500",
+];
+
+function getAgentColor(agentId: number): string {
+  return agentColors[agentId % agentColors.length];
 }
 
 function formatMeetingDate(meeting: MeetingWithAgent) {
-  const date = meeting.scheduledAt || meeting.createdAt;
+  const date = meeting.scheduledAt || meeting.startedAt || meeting.createdAt;
   if (!date) return "No date";
-  return format(new Date(date), "PPP");
+  return format(new Date(date), "MMM d");
 }
 
-function formatMeetingTime(meeting: MeetingWithAgent) {
-  const date = meeting.scheduledAt || meeting.createdAt;
-  if (!date) return "";
-  return format(new Date(date), "p");
+function calculateDuration(meeting: MeetingWithAgent): string | null {
+  if (!meeting.startedAt) return null;
+  
+  const start = new Date(meeting.startedAt);
+  const end = meeting.endedAt ? new Date(meeting.endedAt) : new Date();
+  
+  const diffMs = end.getTime() - start.getTime();
+  const diffMins = Math.round(diffMs / 60000);
+  
+  if (diffMins < 1) return "< 1 minute";
+  if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? "s" : ""}`;
+  
+  const hours = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+  
+  if (mins === 0) return `${hours} hour${hours !== 1 ? "s" : ""}`;
+  return `${hours}h ${mins}m`;
 }
 
-function MeetingCard({ meeting }: { meeting: MeetingWithAgent }) {
+function MeetingRow({ meeting }: { meeting: MeetingWithAgent }) {
   const { toast } = useToast();
+  const status = statusConfig[meeting.status];
+  const duration = calculateDuration(meeting);
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -71,9 +118,7 @@ function MeetingCard({ meeting }: { meeting: MeetingWithAgent }) {
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("PATCH", `/api/meetings/${meeting.id}/status`, {
-        status: "cancelled",
-      });
+      await apiRequest("PATCH", `/api/meetings/${meeting.id}/status`, { status: "cancelled" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/meetings"] });
@@ -84,16 +129,21 @@ function MeetingCard({ meeting }: { meeting: MeetingWithAgent }) {
     },
   });
 
+  const handleRowClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button')) {
+      e.preventDefault();
+    }
+  };
+
   const renderActions = () => {
     switch (meeting.status) {
       case "upcoming":
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
             <Link href={`/meetings/${meeting.id}/lobby`}>
               <Button
                 size="sm"
                 onClick={(e) => {
-                  e.preventDefault();
                   e.stopPropagation();
                   startMutation.mutate();
                 }}
@@ -110,9 +160,8 @@ function MeetingCard({ meeting }: { meeting: MeetingWithAgent }) {
             </Link>
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
                 cancelMutation.mutate();
               }}
@@ -124,49 +173,25 @@ function MeetingCard({ meeting }: { meeting: MeetingWithAgent }) {
               ) : (
                 <XCircle className="h-4 w-4" />
               )}
-              Cancel
             </Button>
           </div>
         );
       case "active":
         return (
-          <Link href={`/meetings/${meeting.id}/call`}>
-            <Button
-              size="sm"
-              onClick={(e) => e.stopPropagation()}
-              data-testid={`button-join-meeting-${meeting.id}`}
-            >
-              <Video className="h-4 w-4" />
-              Join Call
-            </Button>
-          </Link>
+          <div onClick={(e) => e.preventDefault()}>
+            <Link href={`/meetings/${meeting.id}/call`}>
+              <Button size="sm" data-testid={`button-join-meeting-${meeting.id}`}>
+                <Video className="h-4 w-4" />
+                Join
+              </Button>
+            </Link>
+          </div>
         );
       case "processing":
         return (
-          <Button size="sm" variant="outline" disabled data-testid={`button-processing-${meeting.id}`}>
+          <Button size="sm" variant="ghost" disabled data-testid={`button-processing-${meeting.id}`}>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Processing...
           </Button>
-        );
-      case "completed":
-        return (
-          <Link href={`/meetings/${meeting.id}`}>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => e.stopPropagation()}
-              data-testid={`button-view-meeting-${meeting.id}`}
-            >
-              <Eye className="h-4 w-4" />
-              View Details
-            </Button>
-          </Link>
-        );
-      case "cancelled":
-        return (
-          <Badge variant="outline" className="text-muted-foreground">
-            Cancelled
-          </Badge>
         );
       default:
         return null;
@@ -175,178 +200,201 @@ function MeetingCard({ meeting }: { meeting: MeetingWithAgent }) {
 
   return (
     <Link href={`/meetings/${meeting.id}`} data-testid={`link-meeting-${meeting.id}`}>
-      <Card className="hover-elevate">
-        <CardContent className="flex items-center justify-between gap-4 p-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-primary/10">
-              <Video className="h-6 w-6 text-primary" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium" data-testid={`text-meeting-name-${meeting.id}`}>
-                  {meeting.name}
-                </span>
-                <Badge
-                  variant="outline"
-                  className={getStatusBadgeStyles(meeting.status)}
-                  data-testid={`badge-status-${meeting.id}`}
-                >
-                  {meeting.status}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                {meeting.agent && (
-                  <span className="flex items-center gap-1">
-                    <Bot className="h-3 w-3" />
-                    {meeting.agent.name}
-                  </span>
-                )}
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {formatMeetingDate(meeting)}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {formatMeetingTime(meeting)}
-                </span>
-              </div>
-            </div>
+      <div 
+        className="flex items-center justify-between py-4 px-4 border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+        onClick={handleRowClick}
+      >
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-foreground truncate" data-testid={`text-meeting-name-${meeting.id}`}>
+            {meeting.name}
+          </p>
+          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+            {meeting.agent && (
+              <>
+                <span 
+                  className={`w-2 h-2 rounded-full ${getAgentColor(meeting.agent.id)}`}
+                  aria-hidden="true"
+                />
+                <span className="truncate max-w-[150px]">{meeting.agent.name}</span>
+                <span className="text-muted-foreground/50">•</span>
+              </>
+            )}
+            <span>{formatMeetingDate(meeting)}</span>
           </div>
-          <div onClick={(e) => e.preventDefault()}>{renderActions()}</div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="flex items-center gap-6 shrink-0">
+          <Badge 
+            variant="outline" 
+            className={`${status.color} flex items-center gap-1.5 font-normal`}
+            data-testid={`badge-status-${meeting.id}`}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {status.label}
+          </Badge>
+
+          {duration && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-[100px]">
+              <Clock className="h-4 w-4" />
+              <span>{duration}</span>
+            </div>
+          )}
+
+          {!duration && meeting.status !== "completed" && meeting.status !== "cancelled" && (
+            <div className="min-w-[100px]" />
+          )}
+
+          {renderActions()}
+        </div>
+      </div>
     </Link>
   );
 }
 
-function MeetingCardSkeleton() {
+function MeetingRowSkeleton() {
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between p-4">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-12 w-12 rounded-md" />
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-5 w-20" />
-            </div>
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-          </div>
+    <div className="flex items-center justify-between py-4 px-4 border-b border-border/50">
+      <div className="flex-1">
+        <Skeleton className="h-5 w-48 mb-2" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-2 w-2 rounded-full" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-16" />
         </div>
-        <Skeleton className="h-8 w-24" />
-      </CardContent>
-    </Card>
+      </div>
+      <div className="flex items-center gap-6">
+        <Skeleton className="h-6 w-24 rounded-full" />
+        <Skeleton className="h-4 w-20" />
+      </div>
+    </div>
   );
 }
 
-function EmptyState({ status }: { status: string }) {
-  const messages: Record<string, { title: string; description: string }> = {
-    all: {
-      title: "No meetings yet",
-      description: "Create your first meeting to get started with AI-powered video calls.",
-    },
-    upcoming: {
-      title: "No upcoming meetings",
-      description: "Schedule a new meeting to see it here.",
-    },
-    active: {
-      title: "No active meetings",
-      description: "Start a meeting to begin your AI-powered video call.",
-    },
-    processing: {
-      title: "No meetings being processed",
-      description: "Completed meetings will appear here while generating summaries.",
-    },
-    completed: {
-      title: "No completed meetings",
-      description: "Your finished meetings with transcripts and summaries will appear here.",
-    },
-  };
-
-  const { title, description } = messages[status] || messages.all;
-
+function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-      <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
-      <h3 className="mt-4 text-lg font-medium" data-testid="text-empty-title">
-        {title}
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+        <CalendarDays className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-medium mb-1" data-testid="text-empty-title">
+        No meetings found
       </h3>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+      <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+        Create your first meeting to get started with AI-powered video calls.
+      </p>
+      <Button onClick={onCreateClick} data-testid="button-create-first-meeting">
+        <Plus className="h-4 w-4" />
+        New Meeting
+      </Button>
     </div>
   );
 }
 
 export default function Meetings() {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
 
   const { data: meetings = [], isLoading } = useQuery<MeetingWithAgent[]>({
     queryKey: ["/api/meetings"],
   });
 
-  const filteredMeetings = meetings.filter((meeting) => {
-    if (activeTab === "all") return meeting.status !== "cancelled";
-    return meeting.status === activeTab;
+  const { data: agents = [] } = useQuery<Agent[]>({
+    queryKey: ["/api/agents"],
   });
+
+  const filteredMeetings = useMemo(() => {
+    return meetings.filter((meeting) => {
+      if (meeting.status === "cancelled") return false;
+      
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = meeting.name.toLowerCase().includes(query);
+        const matchesAgent = meeting.agent?.name.toLowerCase().includes(query);
+        if (!matchesName && !matchesAgent) return false;
+      }
+      
+      if (statusFilter !== "all" && meeting.status !== statusFilter) return false;
+      
+      if (agentFilter !== "all" && meeting.agentId?.toString() !== agentFilter) return false;
+      
+      return true;
+    });
+  }, [meetings, searchQuery, statusFilter, agentFilter]);
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold" data-testid="text-page-title">
-            Meetings
-          </h1>
-          <p className="text-muted-foreground">
-            View and manage all your AI-powered meetings.
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold" data-testid="text-page-title">
+          My Meetings
+        </h1>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-new-meeting">
           <Plus className="h-4 w-4" />
           New Meeting
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList data-testid="tabs-filter">
-          <TabsTrigger value="all" data-testid="tab-all">
-            All
-          </TabsTrigger>
-          <TabsTrigger value="upcoming" data-testid="tab-upcoming">
-            Upcoming
-          </TabsTrigger>
-          <TabsTrigger value="active" data-testid="tab-active">
-            Active
-          </TabsTrigger>
-          <TabsTrigger value="processing" data-testid="tab-processing">
-            Processing
-          </TabsTrigger>
-          <TabsTrigger value="completed" data-testid="tab-completed">
-            Completed
-          </TabsTrigger>
-        </TabsList>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-[280px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Filter by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            data-testid="input-search"
+          />
+        </div>
 
-        <TabsContent value={activeTab} className="mt-4">
-          {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <MeetingCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : filteredMeetings.length === 0 ? (
-            <EmptyState status={activeTab} />
-          ) : (
-            <div className="space-y-4">
-              {filteredMeetings.map((meeting) => (
-                <MeetingCard key={meeting.id} meeting={meeting} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[130px]" data-testid="select-status">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="upcoming">Upcoming</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={agentFilter} onValueChange={setAgentFilter}>
+          <SelectTrigger className="w-[150px]" data-testid="select-agent">
+            <SelectValue placeholder="Agent" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Agents</SelectItem>
+            {agents.map((agent) => (
+              <SelectItem key={agent.id} value={agent.id.toString()}>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${getAgentColor(agent.id)}`} />
+                  {agent.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="rounded-lg border bg-card">
+        {isLoading ? (
+          <>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <MeetingRowSkeleton key={i} />
+            ))}
+          </>
+        ) : filteredMeetings.length === 0 ? (
+          <EmptyState onCreateClick={() => setDialogOpen(true)} />
+        ) : (
+          <>
+            {filteredMeetings.map((meeting) => (
+              <MeetingRow key={meeting.id} meeting={meeting} />
+            ))}
+          </>
+        )}
+      </div>
 
       <CreateMeetingDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>

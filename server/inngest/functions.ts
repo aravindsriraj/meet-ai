@@ -77,14 +77,19 @@ export const generateMeetingSummary = inngest.createFunction(
       return { success: false, error: "Invalid meetingId" };
     }
 
+    // Wait a moment to ensure transcripts are fully committed to DB
+    await step.sleep("wait-for-db", "2s");
+
     const summaries = await step.run("generate-summary", async () => {
       try {
         const transcripts = await storage.getTranscriptsByMeeting(meetingId);
         
         if (transcripts.length === 0) {
-          console.log(`No transcripts found for meeting ${meetingId}, skipping summary`);
+          console.log(`No transcripts found for meeting ${meetingId}, skipping summary generation`);
           return [];
         }
+        
+        console.log(`Found ${transcripts.length} transcripts for meeting ${meetingId}, generating summary...`);
 
         const transcriptText = transcripts.map(t => `[${t.speaker}]: ${t.content}`).join("\n");
         

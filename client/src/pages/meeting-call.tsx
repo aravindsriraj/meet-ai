@@ -82,6 +82,21 @@ export default function MeetingCall() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/meetings", id] });
+    },
+  });
+
+  const processMeetingMutation = useMutation({
+    mutationFn: async (transcriptData: { speaker: string; content: string; timestamp: number }[]) => {
+      const res = await apiRequest("POST", `/api/meetings/${id}/process`, { transcriptData });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/meetings", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/meetings"] });
+      setLocation(`/meetings/${id}`);
+    },
+    onError: (error) => {
+      console.error("Error processing meeting:", error);
       setLocation(`/meetings/${id}`);
     },
   });
@@ -166,13 +181,29 @@ export default function MeetingCall() {
     setShowEndDialog(true);
   };
 
-  const confirmEndCall = () => {
+  const confirmEndCall = async () => {
     setShowEndDialog(false);
+    
+    // Get transcripts from the realtime agent messages
+    const transcriptData = realtimeAgent.messages
+      .filter(msg => msg.isFinal && msg.content.trim())
+      .map(msg => ({
+        speaker: msg.type === "user" ? "User" : (meeting?.agent?.name || "AI Assistant"),
+        content: msg.content,
+        timestamp: msg.timestamp.getTime(),
+      }));
+    
+    // Disconnect agent and stop video
     realtimeAgent.disconnect();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
-    endMeetingMutation.mutate();
+    
+    // End the meeting first (sets status to "processing")
+    await endMeetingMutation.mutateAsync();
+    
+    // Then process transcripts and generate summaries
+    processMeetingMutation.mutate(transcriptData);
   };
 
   if (isLoading) {

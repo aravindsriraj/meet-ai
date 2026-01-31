@@ -76,8 +76,8 @@ export default function MeetingCall() {
   });
 
   const endMeetingMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/meetings/${id}/end`);
+    mutationFn: async (recordingUrl?: string | null) => {
+      const res = await apiRequest("POST", `/api/meetings/${id}/end`, { recordingUrl });
       return res.json();
     },
     onSuccess: () => {
@@ -208,6 +208,47 @@ export default function MeetingCall() {
     setShowEndDialog(true);
   };
 
+  const uploadRecording = async (blob: Blob): Promise<string | null> => {
+    try {
+      // Step 1: Get presigned URL from backend
+      const fileName = `meeting-${id}-recording.webm`;
+      const urlResponse = await fetch("/api/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fileName,
+          size: blob.size,
+          contentType: blob.type || "audio/webm",
+        }),
+      });
+
+      if (!urlResponse.ok) {
+        console.error("Failed to get upload URL");
+        return null;
+      }
+
+      const { uploadURL, objectPath } = await urlResponse.json();
+
+      // Step 2: Upload blob directly to presigned URL
+      const uploadResponse = await fetch(uploadURL, {
+        method: "PUT",
+        body: blob,
+        headers: { "Content-Type": blob.type || "audio/webm" },
+      });
+
+      if (!uploadResponse.ok) {
+        console.error("Failed to upload recording");
+        return null;
+      }
+
+      console.log("Recording uploaded to:", objectPath);
+      return objectPath;
+    } catch (error) {
+      console.error("Error uploading recording:", error);
+      return null;
+    }
+  };
+
   const confirmEndCall = async () => {
     setShowEndDialog(false);
     
@@ -220,21 +261,13 @@ export default function MeetingCall() {
         timestamp: msg.timestamp.getTime(),
       }));
     
-    // Stop recording and get the audio blob
-    let recordingBlob: Blob | null = null;
+    // Stop recording and upload to object storage
+    let recordingUrl: string | null = null;
     if (realtimeAgent.isRecording) {
-      recordingBlob = await realtimeAgent.stopRecording();
+      const recordingBlob = await realtimeAgent.stopRecording();
       if (recordingBlob) {
-        console.log("Recording saved:", recordingBlob.size, "bytes");
-        // Create a download link for the recording (for now, client-side download)
-        const url = URL.createObjectURL(recordingBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `meeting-${id}-recording.webm`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        console.log("Recording captured:", recordingBlob.size, "bytes");
+        recordingUrl = await uploadRecording(recordingBlob);
       }
     }
     
@@ -244,8 +277,8 @@ export default function MeetingCall() {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
     
-    // End the meeting first (sets status to "processing")
-    await endMeetingMutation.mutateAsync();
+    // End the meeting with recording URL (sets status to "processing")
+    await endMeetingMutation.mutateAsync(recordingUrl);
     
     // Then process transcripts and generate summaries
     processMeetingMutation.mutate(transcriptData);

@@ -8,6 +8,7 @@ import { z } from "zod";
 import OpenAI from "openai";
 import { inngest } from "./inngest/client";
 import { allFunctions } from "./inngest/functions";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 const streamChat = StreamChat.getInstance(
   process.env.STREAM_API_KEY!,
@@ -29,6 +30,12 @@ export async function registerRoutes(
   // =====================
   
   app.use("/api/inngest", serve({ client: inngest, functions: allFunctions }));
+
+  // =====================
+  // OBJECT STORAGE ROUTES
+  // =====================
+  
+  registerObjectStorageRoutes(app);
 
   // =====================
   // AGENTS ROUTES

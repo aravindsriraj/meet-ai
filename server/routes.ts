@@ -181,7 +181,7 @@ export async function registerRoutes(
   app.post("/api/meetings/:id/end", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      const { recordingUrl } = req.body;
+      const recordingUrl = req.body?.recordingUrl || null;
       const meeting = await storage.endMeeting(id, recordingUrl);
       if (!meeting) {
         return res.status(404).json({ error: "Meeting not found" });

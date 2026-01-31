@@ -320,15 +320,14 @@ export default function MeetingCall() {
             }`}
             data-testid="video-preview"
           >
-            {isVideoOn ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full object-cover"
-              />
-            ) : (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`h-full w-full object-cover ${isVideoOn ? "" : "hidden"}`}
+            />
+            {!isVideoOn && (
               <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted text-muted-foreground">
                 <VideoOff className="h-8 w-8" />
                 <span className="text-xs">Camera off</span>

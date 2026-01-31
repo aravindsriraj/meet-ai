@@ -1,0 +1,59 @@
+Meet AI is a full-stack, AI-powered video call application. It allows users to create and manage video meetings with custom AI agents trained for specific roles, such as a language tutor, interview coach, or sales assistant. These AI agents actively participate and assist during the calls.
+Here’s a detailed breakdown of the project:
+What it is
+AI-powered video call app
+ The core functionality revolves around real-time video calls with integrated AI agents.
+AI agents
+ These aren’t just for summaries — they are live, interactive AI participants in the meeting, powered by Stream Video SDK and the OpenAI Realtime API.
+Post-call experience
+ After a call, the meeting switches to a processing state. Background jobs automatically fetch transcripts, generate AI summaries, and save everything to the database.
+Meeting content
+ Once processing is complete, users can access:
+Summaries: A clean breakdown of topics discussed, organized by topic and timestamp
+
+
+Transcripts: Fully searchable transcripts with highlighted search terms
+
+
+Recordings: Full call recordings available for replay
+
+
+AI meeting Q&A: A ChatGPT-like interface that understands meeting context, powered by Stream Chat SDK, allowing users to ask specific questions about the meeting
+
+
+Mobile responsive
+ The app is fully responsive, with modals and dropdowns transforming into mobile-friendly drawers for a smooth experience.
+How it should work
+New meeting creation
+ Users click a “New Meeting” button, name the meeting, and create or select an AI agent. Each agent is configured with instructions defining its role.
+Meeting scheduling and start
+ After selecting an agent, the meeting is created in an “upcoming” state. Users can schedule, cancel, or start the call when ready.
+Lobby and joining the call
+ Before joining, users enter a lobby to check their camera and microphone.
+Real-time AI interaction
+ Once inside the call, the AI agent joins and responds in real time using Stream Video SDK and the OpenAI Realtime API.
+Post-call processing
+ When the call ends, the meeting status changes to “processing.” Inngest and Agent Kit handle background jobs for transcript fetching, summarization, and database storage.
+Completed state and content access
+ After processing finishes, the meeting is marked “completed,” and all content — summaries, searchable transcripts, recordings, and AI Q&A — becomes available.
+
+Tech stack used
+Full-stack framework
+ Next.js 15 with React 19, supporting server components and server-side rendering.
+Database
+ PostgreSQL via Neon, with Drizzle ORM for database access.
+Type safety
+ tRPC for end-to-end type safety, paired with TanStack Query.
+Styling
+ Tailwind CSS v4 with shadcn/ui for accessible, reusable components.
+Video and chat (Use websearch to understand documentation of stream video and chat. https://getstream.io/video/docs/ & https://getstream.io/chat/docs/ )
+ Stream Video SDK and Stream Chat SDK for real-time calls and meeting Q&A.
+Background jobs (Use websearch to understand the inngest documentation https://www.inngest.com/llms.txt)
+ Inngest for handling async tasks like transcript generation and summarization.
+AI integration
+ OpenAI for real-time agents and other AI-driven features. (Use openaiAgentSDKDocs to refer to openai agents sdk documentation for building realtime voice agents. Use openaiDeveloperDocs to access openai API documentation)
+Development tools
+ Node.js (v18.18+), npm, and npx.
+IDE
+ Visual Studio Code, with the Tailwind CSS IntelliSense extension recommended.
+

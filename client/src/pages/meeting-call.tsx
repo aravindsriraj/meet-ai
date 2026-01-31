@@ -76,8 +76,8 @@ export default function MeetingCall() {
   });
 
   const endMeetingMutation = useMutation({
-    mutationFn: async (recordingUrl?: string | null) => {
-      const res = await apiRequest("POST", `/api/meetings/${id}/end`, { recordingUrl });
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/meetings/${id}/end`);
       return res.json();
     },
     onSuccess: () => {

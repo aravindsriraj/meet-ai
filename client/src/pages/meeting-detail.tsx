@@ -35,14 +35,11 @@ import {
   Search,
   MessageSquare,
   FileText,
-  Mic,
   Loader2,
   User,
   ChevronDown,
   ChevronRight,
-  Download,
   Plus,
-  VideoOff,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -328,87 +325,6 @@ function SummaryList({ summaries }: { summaries: Summary[] }) {
       {summaries.map((summary, index) => (
         <SummaryCard key={summary.id} summary={summary} defaultOpen={index === 0} />
       ))}
-    </div>
-  );
-}
-
-function RecordingPlayer({ recordingUrl }: { recordingUrl: string | null }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-
-  if (!recordingUrl) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-        <VideoOff className="h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-4 text-lg font-medium">Recording not available</h3>
-        <p className="mt-2 text-sm text-muted-foreground max-w-md">
-          This meeting does not have a recording. Recordings are saved when enabled 
-          before the meeting starts.
-        </p>
-      </div>
-    );
-  }
-
-  const isVideo = recordingUrl.includes(".mp4") || 
-                  recordingUrl.includes(".webm") || 
-                  recordingUrl.includes("video");
-  const isAudio = recordingUrl.includes(".mp3") || 
-                  recordingUrl.includes(".wav") || 
-                  recordingUrl.includes(".ogg") ||
-                  recordingUrl.includes("audio");
-
-  const handleDownload = () => {
-    const link = document.createElement("a");
-    link.href = recordingUrl;
-    link.download = `meeting-recording.${isVideo ? "mp4" : isAudio ? "mp3" : "mp4"}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-6">
-          {isAudio && !isVideo ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center p-8 bg-muted/50 rounded-lg">
-                <Mic className="h-16 w-16 text-muted-foreground" />
-              </div>
-              <audio
-                ref={audioRef}
-                controls
-                className="w-full"
-                src={recordingUrl}
-                data-testid="audio-player"
-              >
-                Your browser does not support the audio element.
-              </audio>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                <video
-                  ref={videoRef}
-                  controls
-                  className="w-full h-full"
-                  src={recordingUrl}
-                  data-testid="video-player"
-                >
-                  Your browser does not support the video element.
-                </video>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end">
-        <Button onClick={handleDownload} variant="outline" data-testid="button-download-recording">
-          <Download className="h-4 w-4" />
-          Download Recording
-        </Button>
-      </div>
     </div>
   );
 }
@@ -745,10 +661,6 @@ export default function MeetingDetail() {
               <FileText className="mr-1 h-4 w-4" />
               Transcript
             </TabsTrigger>
-            <TabsTrigger value="recording" data-testid="tab-recording">
-              <Mic className="mr-1 h-4 w-4" />
-              Recording
-            </TabsTrigger>
             <TabsTrigger value="ask-ai" data-testid="tab-ask-ai">
               <Bot className="mr-1 h-4 w-4" />
               Ask AI
@@ -761,10 +673,6 @@ export default function MeetingDetail() {
 
           <TabsContent value="transcript" className="mt-4">
             <TranscriptViewer transcripts={meeting.transcripts} meetingId={meeting.id} />
-          </TabsContent>
-
-          <TabsContent value="recording" className="mt-4">
-            <RecordingPlayer recordingUrl={meeting.recordingUrl} />
           </TabsContent>
 
           <TabsContent value="ask-ai" className="mt-4">

@@ -569,7 +569,7 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
       // Turn detection and other settings must be configured via session.update after connection
       const sessionConfig = JSON.stringify({
         type: "realtime",
-        model: "gpt-4o-realtime-preview",
+        model: "gpt-realtime",
         instructions,
         audio: { 
           output: { voice } 

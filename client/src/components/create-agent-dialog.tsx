@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertAgentSchema } from "@shared/schema";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload, Sparkles, Bot, X } from "lucide-react";
 
 const voiceOptions = [
   { value: "alloy", label: "Alloy" },
@@ -39,6 +40,10 @@ interface CreateAgentDialogProps {
 
 export function CreateAgentDialog({ open, onOpenChange }: CreateAgentDialogProps) {
   const { toast } = useToast();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const form = useForm<CreateAgentFormValues>({
     resolver: zodResolver(createAgentFormSchema),
@@ -47,12 +52,16 @@ export function CreateAgentDialog({ open, onOpenChange }: CreateAgentDialogProps
       description: "",
       instructions: "",
       voice: "alloy",
+      avatarUrl: null,
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (values: CreateAgentFormValues) => {
-      const response = await apiRequest("POST", "/api/agents", values);
+      const response = await apiRequest("POST", "/api/agents", {
+        ...values,
+        avatarUrl: avatarUrl,
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -62,6 +71,7 @@ export function CreateAgentDialog({ open, onOpenChange }: CreateAgentDialogProps
         description: "Your AI agent has been created successfully.",
       });
       form.reset();
+      setAvatarUrl(null);
       onOpenChange(false);
     },
     onError: (error) => {
@@ -73,12 +83,126 @@ export function CreateAgentDialog({ open, onOpenChange }: CreateAgentDialogProps
     },
   });
 
+  const handleGenerateAvatar = async () => {
+    const name = form.getValues("name");
+    const description = form.getValues("description");
+
+    if (!name) {
+      toast({
+        title: "Name required",
+        description: "Please enter an agent name first to generate an avatar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingAvatar(true);
+    try {
+      const response = await fetch("/api/generate-avatar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentName: name, agentDescription: description }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate avatar");
+      }
+
+      const data = await response.json();
+      setAvatarUrl(data.avatarUrl);
+      toast({
+        title: "Avatar generated",
+        description: "Your AI-generated avatar is ready!",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate avatar. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAvatar(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const urlResponse = await fetch("/api/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+
+      if (!urlResponse.ok) {
+        throw new Error("Failed to get upload URL");
+      }
+
+      const { uploadURL, publicUrl } = await urlResponse.json();
+
+      const uploadResponse = await fetch(uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload file");
+      }
+
+      setAvatarUrl(publicUrl);
+      toast({
+        title: "Avatar uploaded",
+        description: "Your avatar has been uploaded successfully!",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to upload avatar. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarUrl(null);
+  };
+
   const onSubmit = (values: CreateAgentFormValues) => {
     createMutation.mutate(values);
   };
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      form.reset();
+      setAvatarUrl(null);
+    }
+    onOpenChange(open);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[525px]" data-testid="dialog-create-agent">
         <DialogHeader>
           <DialogTitle>Create AI Agent</DialogTitle>
@@ -88,43 +212,109 @@ export function CreateAgentDialog({ open, onOpenChange }: CreateAgentDialogProps
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="e.g., Sales Assistant" 
-                      data-testid="input-agent-name"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description (optional)</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="A brief description of what this agent does..."
-                      className="resize-none"
-                      rows={2}
-                      data-testid="textarea-agent-description"
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="flex items-start gap-4">
+              <div className="flex flex-col items-center gap-2">
+                <div className="relative">
+                  <Avatar className="h-20 w-20 border-2 border-border">
+                    <AvatarImage src={avatarUrl || undefined} />
+                    <AvatarFallback className="bg-primary/10">
+                      <Bot className="h-8 w-8 text-primary" />
+                    </AvatarFallback>
+                  </Avatar>
+                  {avatarUrl && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="absolute -top-1 -right-1 h-6 w-6 rounded-full"
+                      onClick={handleRemoveAvatar}
+                      data-testid="button-remove-avatar"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar || isGeneratingAvatar}
+                    data-testid="button-upload-avatar"
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Upload className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={handleGenerateAvatar}
+                    disabled={isGeneratingAvatar || isUploadingAvatar}
+                    data-testid="button-generate-avatar"
+                  >
+                    {isGeneratingAvatar ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  data-testid="input-avatar-file"
+                />
+              </div>
+              <div className="flex-1 space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="e.g., Sales Assistant" 
+                          data-testid="input-agent-name"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (optional)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="A brief description of what this agent does..."
+                          className="resize-none"
+                          rows={2}
+                          data-testid="textarea-agent-description"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
             <FormField
               control={form.control}
               name="instructions"
@@ -172,14 +362,14 @@ export function CreateAgentDialog({ open, onOpenChange }: CreateAgentDialogProps
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => handleOpenChange(false)}
                 data-testid="button-cancel-create"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || isGeneratingAvatar || isUploadingAvatar}
                 data-testid="button-submit-create"
               >
                 {createMutation.isPending && (

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Bot, Plus, Pencil, Trash2, Volume2 } from "lucide-react";
 import { Link } from "wouter";
@@ -143,9 +144,12 @@ export default function Agents() {
             <Card key={agent.id} className="hover-elevate" data-testid={`card-agent-${agent.id}`}>
               <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
                 <Link href={`/agents/${agent.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                    <Bot className="h-5 w-5 text-primary" />
-                  </div>
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarImage src={agent.avatarUrl || undefined} alt={agent.name} />
+                    <AvatarFallback className="bg-primary/10">
+                      <Bot className="h-5 w-5 text-primary" />
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="min-w-0 flex-1">
                     <CardTitle className="text-base truncate" data-testid={`text-agent-name-${agent.id}`}>
                       {agent.name}

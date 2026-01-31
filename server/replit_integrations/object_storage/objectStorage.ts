@@ -1,35 +1,22 @@
-import { Storage } from "@google-cloud/storage";
+import { Client } from "@replit/object-storage";
 
-const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-const storage = new Storage();
-const bucket = bucketId ? storage.bucket(bucketId) : null;
+const client = new Client();
 
 export class ObjectStorageService {
-  private static getBucket() {
-    if (!bucket) {
-      throw new Error("Object storage not configured - missing DEFAULT_OBJECT_STORAGE_BUCKET_ID");
-    }
-    return bucket;
-  }
-
   static async getPresignedUploadUrl(
     fileName: string,
     contentType: string
   ): Promise<{ uploadURL: string; objectPath: string; publicUrl: string }> {
-    const bkt = this.getBucket();
     const objectPath = `public/avatars/${Date.now()}-${fileName}`;
-    const file = bkt.file(objectPath);
-
-    const [uploadURL] = await file.getSignedUrl({
-      version: "v4",
-      action: "write",
-      expires: Date.now() + 15 * 60 * 1000,
-      contentType,
+    
+    const { uploadUrl } = await client.uploadUrl(objectPath, {
+      expiresIn: 900000, // 15 minutes in ms
     });
 
+    const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
     const publicUrl = `https://storage.googleapis.com/${bucketId}/${objectPath}`;
 
-    return { uploadURL, objectPath, publicUrl };
+    return { uploadURL: uploadUrl, objectPath, publicUrl };
   }
 
   static async uploadBuffer(
@@ -37,26 +24,17 @@ export class ObjectStorageService {
     buffer: Buffer,
     contentType: string
   ): Promise<{ objectPath: string; publicUrl: string }> {
-    const bkt = this.getBucket();
     const objectPath = `public/avatars/${Date.now()}-${fileName}`;
-    const file = bkt.file(objectPath);
+    
+    await client.uploadFromBytes(objectPath, buffer);
 
-    await file.save(buffer, {
-      contentType,
-      public: true,
-      metadata: {
-        cacheControl: "public, max-age=31536000",
-      },
-    });
-
+    const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
     const publicUrl = `https://storage.googleapis.com/${bucketId}/${objectPath}`;
 
     return { objectPath, publicUrl };
   }
 
   static async deleteFile(objectPath: string): Promise<void> {
-    const bkt = this.getBucket();
-    const file = bkt.file(objectPath);
-    await file.delete({ ignoreNotFound: true });
+    await client.delete(objectPath);
   }
 }

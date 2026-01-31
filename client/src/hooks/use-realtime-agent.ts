@@ -143,6 +143,7 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
         break;
 
       case "response.audio_transcript.delta":
+      case "response.output_audio_transcript.delta":
         if (event.delta && currentAssistantMessageIdRef.current) {
           currentAssistantTextRef.current += event.delta;
           updateMessage(currentAssistantMessageIdRef.current, currentAssistantTextRef.current, false);
@@ -150,6 +151,7 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
         break;
 
       case "response.text.delta":
+      case "response.output_text.delta":
         if (event.delta && currentAssistantMessageIdRef.current) {
           currentAssistantTextRef.current += event.delta;
           updateMessage(currentAssistantMessageIdRef.current, currentAssistantTextRef.current, false);
@@ -157,7 +159,9 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
         break;
 
       case "response.audio_transcript.done":
+      case "response.output_audio_transcript.done":
       case "response.text.done":
+      case "response.output_text.done":
         if (currentAssistantMessageIdRef.current) {
           updateMessage(currentAssistantMessageIdRef.current, currentAssistantTextRef.current, true);
         }
@@ -298,12 +302,17 @@ export function useRealtimeAgent(options: UseRealtimeAgentOptions = {}) {
         setState(prev => ({ ...prev, isListening: true }));
         
         // Enable input audio transcription to get user speech-to-text
+        // Using GA API structure: audio.input.transcription
         const sessionUpdate = {
           type: "session.update",
           session: {
             type: "realtime",
-            input_audio_transcription: {
-              model: "gpt-4o-transcribe"
+            audio: {
+              input: {
+                transcription: {
+                  model: "gpt-4o-transcribe"
+                }
+              }
             }
           }
         };

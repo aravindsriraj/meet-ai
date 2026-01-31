@@ -14,11 +14,13 @@ import type { Agent, MeetingWithAgent } from "@shared/schema";
 
 const voiceColors: Record<string, string> = {
   alloy: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  ash: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+  ballad: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+  coral: "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200",
   echo: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  fable: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  onyx: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
-  nova: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  sage: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   shimmer: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+  verse: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
 };
 
 function formatDate(date: Date | string) {

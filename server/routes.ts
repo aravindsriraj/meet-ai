@@ -632,6 +632,16 @@ ${context}`
         return res.status(400).json({ error: "SDP offer is required" });
       }
 
+      // Valid voices for OpenAI Realtime API
+      const validRealtimeVoices = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"];
+      
+      // Map old TTS voices to Realtime API voices
+      const voiceMapping: Record<string, string> = {
+        fable: "sage",
+        onyx: "ash", 
+        nova: "coral",
+      };
+
       // Get agent configuration if provided
       let instructions = "You are a helpful AI assistant participating in a video call. Be conversational and natural. Always respond in English unless the user specifically asks you to speak another language.";
       let voice = "alloy";
@@ -640,7 +650,9 @@ ${context}`
         const agent = await storage.getAgent(agentId);
         if (agent) {
           instructions = agent.instructions;
-          voice = agent.voice || "alloy";
+          let agentVoice = agent.voice || "alloy";
+          // Map old voices to new ones, or use as-is if valid
+          voice = voiceMapping[agentVoice] || (validRealtimeVoices.includes(agentVoice) ? agentVoice : "alloy");
         }
       }
 

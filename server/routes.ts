@@ -8,6 +8,7 @@ import { z } from "zod";
 import OpenAI from "openai";
 import { inngest } from "./inngest/client";
 import { allFunctions } from "./inngest/functions";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 const streamChat = StreamChat.getInstance(
   process.env.STREAM_API_KEY!,
@@ -696,6 +697,11 @@ ${context}`
       res.status(500).json({ error: "Failed to create realtime session" });
     }
   });
+
+  // =====================
+  // OBJECT STORAGE ROUTES
+  // =====================
+  registerObjectStorageRoutes(app);
 
   return httpServer;
 }

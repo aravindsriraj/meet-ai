@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAgentSchema, insertMeetingSchema } from "@shared/schema";
@@ -536,6 +536,75 @@ ${meeting.transcripts.slice(0, 50).map(t => `[${t.speaker}]: ${t.content}`).join
     } catch (error) {
       console.error("Error processing meeting:", error);
       res.status(500).json({ error: "Failed to process meeting" });
+    }
+  });
+
+  // =====================
+  // REALTIME API SESSION (WebRTC)
+  // =====================
+
+  app.post("/api/realtime/session", express.text({ type: ["application/sdp", "text/plain"] }), async (req: Request, res: Response) => {
+    try {
+      const agentId = req.query.agentId ? parseInt(req.query.agentId as string) : null;
+      const sdpOffer = req.body;
+
+      if (!sdpOffer || typeof sdpOffer !== "string") {
+        return res.status(400).json({ error: "SDP offer is required" });
+      }
+
+      // Get agent configuration if provided
+      let instructions = "You are a helpful AI assistant participating in a video call. Be conversational and natural.";
+      let voice = "alloy";
+      
+      if (agentId) {
+        const agent = await storage.getAgent(agentId);
+        if (agent) {
+          instructions = agent.instructions;
+          voice = agent.voice || "alloy";
+        }
+      }
+
+      // Create session configuration
+      const sessionConfig = JSON.stringify({
+        type: "realtime",
+        model: "gpt-realtime",
+        instructions,
+        voice,
+        input_audio_transcription: { model: "gpt-4o-transcribe" },
+        turn_detection: { 
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500
+        }
+      });
+
+      // Create multipart form data
+      const formData = new FormData();
+      formData.set("sdp", sdpOffer);
+      formData.set("session", sessionConfig);
+
+      // Call OpenAI Realtime API
+      const response = await fetch("https://api.openai.com/v1/realtime/calls", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.AI_INTEGRATIONS_OPENAI_API_KEY}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("OpenAI Realtime API error:", errorText);
+        return res.status(response.status).json({ error: "Failed to create realtime session" });
+      }
+
+      // Return the SDP answer
+      const sdpAnswer = await response.text();
+      res.set("Content-Type", "application/sdp").send(sdpAnswer);
+    } catch (error) {
+      console.error("Error creating realtime session:", error);
+      res.status(500).json({ error: "Failed to create realtime session" });
     }
   });
 

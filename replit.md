@@ -45,11 +45,24 @@ The application uses these core entities:
 - **Summaries**: AI-generated topic summaries with timestamps
 - **Conversations/Messages**: Q&A chat threads tied to meetings
 
-### Real-time Audio/Voice Features
-- Audio recording via MediaRecorder API (WebM/Opus format)
-- Audio playback via AudioWorklet for streaming PCM16 audio
-- Voice streaming with SSE (Server-Sent Events) for real-time AI responses
-- Audio format detection and conversion utilities (FFmpeg for format conversion)
+### Real-time Voice Features (OpenAI Realtime API with WebRTC)
+- **Continuous Voice Conversation**: WebRTC-based connection to OpenAI Realtime API for natural, hands-free conversation
+- **Backend Endpoint**: `/api/realtime/session` - forwards SDP offer to OpenAI's `/v1/realtime/calls` with session config
+- **Frontend Hook**: `useRealtimeAgent` - manages WebRTC peer connection, audio I/O, and data channel events
+- **Voice Activity Detection**: Server-side VAD automatically detects when user starts/stops speaking
+- **Live Transcription**: Real-time transcript display using `input_audio_transcription` events
+- **Interruption Support**: Users can interrupt AI speech at any time
+- **Text Input Fallback**: Optional text input for typing messages to the AI
+
+#### WebRTC Connection Flow
+1. Client creates RTCPeerConnection and gets local audio stream
+2. Client creates data channel "oai-events" for Realtime API events
+3. Client creates SDP offer and sends to `/api/realtime/session`
+4. Server forwards offer + session config to OpenAI Realtime API
+5. Server returns SDP answer to client
+6. Client sets remote description, connection established
+7. Audio flows bidirectionally via WebRTC tracks
+8. Events (transcripts, response status) flow via data channel
 
 ### Development vs Production
 - Development: Vite dev server with HMR, proxied through Express

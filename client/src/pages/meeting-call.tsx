@@ -9,14 +9,18 @@ import {
   MessageSquare,
   X,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Loader2,
+  Keyboard,
+  Send
 } from "lucide-react";
 import { useParams, useLocation } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useVoiceRecorder, useAudioPlayback } from "../../replit_integrations/audio";
+import { useRealtimeAgent, type RealtimeMessage } from "@/hooks/use-realtime-agent";
 import type { MeetingWithAgent } from "@shared/schema";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,13 +32,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface TranscriptMessage {
-  id: number;
-  speaker: "user" | "ai";
-  content: string;
-  timestamp: Date;
-}
-
 export default function MeetingCall() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -44,21 +41,28 @@ export default function MeetingCall() {
   const [showTranscript, setShowTranscript] = useState(true);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
-  const [transcriptMessages, setTranscriptMessages] = useState<TranscriptMessage[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isAiSpeaking, setIsAiSpeaking] = useState(false);
-  const [currentAiText, setCurrentAiText] = useState("");
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textMessage, setTextMessage] = useState("");
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const messageIdRef = useRef(0);
-  
-  const recorder = useVoiceRecorder();
-  const audioPlayback = useAudioPlayback();
 
   const { data: meeting, isLoading } = useQuery<MeetingWithAgent>({
     queryKey: ["/api/meetings", id],
+  });
+
+  const realtimeAgent = useRealtimeAgent({
+    agentId: meeting?.agentId ?? undefined,
+    onConnected: () => {
+      console.log("Realtime agent connected");
+    },
+    onDisconnected: () => {
+      console.log("Realtime agent disconnected");
+    },
+    onError: (error) => {
+      console.error("Realtime agent error:", error);
+    },
   });
 
   const startMeetingMutation = useMutation({
@@ -89,11 +93,17 @@ export default function MeetingCall() {
   }, [meeting?.status]);
 
   useEffect(() => {
+    if (meeting && meeting.agentId && !realtimeAgent.isConnected && !realtimeAgent.isConnecting) {
+      realtimeAgent.connect();
+    }
+  }, [meeting?.agentId, realtimeAgent.isConnected, realtimeAgent.isConnecting]);
+
+  useEffect(() => {
     async function setupCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: true,
+          audio: false,
         });
         streamRef.current = stream;
         if (videoRef.current) {
@@ -121,12 +131,8 @@ export default function MeetingCall() {
   }, [isVideoOn]);
 
   useEffect(() => {
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = isMicOn;
-      });
-    }
-  }, [isMicOn]);
+    realtimeAgent.setMuted(!isMicOn);
+  }, [isMicOn, realtimeAgent.setMuted]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -137,11 +143,7 @@ export default function MeetingCall() {
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [transcriptMessages]);
-
-  useEffect(() => {
-    audioPlayback.init();
-  }, [audioPlayback.init]);
+  }, [realtimeAgent.messages]);
 
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -153,96 +155,10 @@ export default function MeetingCall() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const addTranscriptMessage = useCallback((speaker: "user" | "ai", content: string) => {
-    messageIdRef.current += 1;
-    setTranscriptMessages((prev) => [
-      ...prev,
-      { id: messageIdRef.current, speaker, content, timestamp: new Date() },
-    ]);
-  }, []);
-
-  const handleTalkStart = async () => {
-    if (isRecording) return;
-    setIsRecording(true);
-    audioPlayback.clear();
-    // Ensure AudioContext is resumed on user interaction (browser autoplay policy)
-    await audioPlayback.ensureResumed();
-    try {
-      await recorder.startRecording();
-    } catch (err) {
-      console.error("Failed to start recording:", err);
-      setIsRecording(false);
-    }
-  };
-
-  const handleTalkEnd = async () => {
-    if (!isRecording) return;
-    setIsRecording(false);
-    
-    try {
-      const blob = await recorder.stopRecording();
-      if (blob.size === 0) return;
-
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        
-        setIsAiSpeaking(true);
-        setCurrentAiText("");
-
-        const response = await fetch("/api/voice-chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            audio: base64,
-            agentId: meeting?.agentId,
-          }),
-        });
-
-        const eventReader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let fullAiTranscript = "";
-
-        if (eventReader) {
-          while (true) {
-            const { done, value } = await eventReader.read();
-            if (done) break;
-
-            const text = decoder.decode(value);
-            const lines = text.split("\n");
-
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  
-                  if (data.type === "user_transcript") {
-                    addTranscriptMessage("user", data.data);
-                  } else if (data.type === "transcript") {
-                    fullAiTranscript += data.data;
-                    setCurrentAiText(fullAiTranscript);
-                  } else if (data.type === "audio") {
-                    await audioPlayback.pushAudio(data.data);
-                  } else if (data.type === "done") {
-                    if (fullAiTranscript) {
-                      addTranscriptMessage("ai", fullAiTranscript);
-                    }
-                    audioPlayback.signalComplete();
-                    setIsAiSpeaking(false);
-                    setCurrentAiText("");
-                  }
-                } catch {
-                  // Skip invalid JSON
-                }
-              }
-            }
-          }
-        }
-      };
-      reader.readAsDataURL(blob);
-    } catch (err) {
-      console.error("Failed to process voice:", err);
-      setIsAiSpeaking(false);
+  const handleSendTextMessage = () => {
+    if (textMessage.trim()) {
+      realtimeAgent.sendTextMessage(textMessage.trim());
+      setTextMessage("");
     }
   };
 
@@ -252,6 +168,7 @@ export default function MeetingCall() {
 
   const confirmEndCall = () => {
     setShowEndDialog(false);
+    realtimeAgent.disconnect();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
@@ -296,21 +213,62 @@ export default function MeetingCall() {
             <span className="text-sm font-medium text-white">
               {meeting?.agent?.name || "AI Agent"}
             </span>
-            {isAiSpeaking && (
-              <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            {realtimeAgent.isConnecting && (
+              <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />
+            )}
+            {realtimeAgent.isConnected && (
+              <span className="flex h-2 w-2 rounded-full bg-green-500" title="Connected" />
+            )}
+            {realtimeAgent.isSpeaking && (
+              <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" title="Speaking" />
             )}
           </div>
 
-          {isAiSpeaking && (
+          {realtimeAgent.isConnecting && (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-4">
+              <div className="flex h-32 w-32 items-center justify-center rounded-full bg-primary/20">
+                <Loader2 className="h-12 w-12 text-primary animate-spin" />
+              </div>
+              <p className="text-white/70 text-sm">Connecting to AI agent...</p>
+            </div>
+          )}
+
+          {realtimeAgent.isConnected && !realtimeAgent.isSpeaking && (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-4">
+              <div className="flex h-32 w-32 items-center justify-center rounded-full bg-primary/10 border-2 border-primary/30">
+                <Bot className="h-16 w-16 text-primary/60" />
+              </div>
+              <div className="text-center">
+                <p className="text-white/90 text-sm font-medium">AI is listening</p>
+                <p className="text-white/50 text-xs mt-1">Speak naturally to have a conversation</p>
+              </div>
+            </div>
+          )}
+
+          {realtimeAgent.isSpeaking && (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-4">
               <div className="flex h-32 w-32 items-center justify-center rounded-full bg-primary/20 animate-pulse">
                 <Bot className="h-16 w-16 text-primary" />
               </div>
-              {currentAiText && (
-                <div className="max-w-md rounded-lg bg-black/60 px-4 py-2 backdrop-blur">
-                  <p className="text-center text-sm text-white/90">{currentAiText}</p>
-                </div>
-              )}
+              <p className="text-white/90 text-sm font-medium">AI is speaking...</p>
+            </div>
+          )}
+
+          {realtimeAgent.error && (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-4">
+              <div className="flex h-32 w-32 items-center justify-center rounded-full bg-destructive/20">
+                <Bot className="h-16 w-16 text-destructive" />
+              </div>
+              <div className="max-w-md rounded-lg bg-destructive/20 px-4 py-2">
+                <p className="text-center text-sm text-destructive">{realtimeAgent.error}</p>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={() => realtimeAgent.connect()}
+                data-testid="button-retry-connect"
+              >
+                Retry Connection
+              </Button>
             </div>
           )}
 
@@ -359,19 +317,25 @@ export default function MeetingCall() {
           </Button>
 
           <Button
-            variant={isRecording ? "default" : "outline"}
-            className={`px-6 ${isRecording ? "bg-primary text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"}`}
-            onMouseDown={handleTalkStart}
-            onMouseUp={handleTalkEnd}
-            onMouseLeave={handleTalkEnd}
-            onTouchStart={handleTalkStart}
-            onTouchEnd={handleTalkEnd}
-            disabled={isAiSpeaking}
-            data-testid="button-talk-to-ai"
+            variant={showTextInput ? "default" : "outline"}
+            size="icon"
+            onClick={() => setShowTextInput(!showTextInput)}
+            className="border-primary text-primary hover:bg-primary/10"
+            data-testid="button-toggle-text-input"
           >
-            <Bot className="mr-2 h-4 w-4" />
-            {isRecording ? "Recording..." : "Hold to Talk to AI"}
+            <Keyboard className="h-5 w-5" />
           </Button>
+
+          {realtimeAgent.isSpeaking && (
+            <Button
+              variant="outline"
+              onClick={() => realtimeAgent.interrupt()}
+              className="px-6 border-yellow-500 text-yellow-500 hover:bg-yellow-500/10"
+              data-testid="button-interrupt"
+            >
+              Interrupt
+            </Button>
+          )}
 
           <Button
             variant="destructive"
@@ -383,6 +347,28 @@ export default function MeetingCall() {
             End Call
           </Button>
         </div>
+
+        {showTextInput && (
+          <div className="border-t border-white/10 bg-black/80 p-4 backdrop-blur">
+            <div className="flex gap-2">
+              <Input
+                value={textMessage}
+                onChange={(e) => setTextMessage(e.target.value)}
+                placeholder="Type a message to the AI..."
+                className="flex-1 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                onKeyDown={(e) => e.key === "Enter" && handleSendTextMessage()}
+                data-testid="input-text-message"
+              />
+              <Button
+                onClick={handleSendTextMessage}
+                disabled={!textMessage.trim()}
+                data-testid="button-send-text"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showTranscript && (
@@ -393,7 +379,7 @@ export default function MeetingCall() {
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-white/70" />
-              <h2 className="text-sm font-medium text-white">Transcript</h2>
+              <h2 className="text-sm font-medium text-white">Live Transcript</h2>
             </div>
             <Button
               variant="ghost"
@@ -407,45 +393,41 @@ export default function MeetingCall() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-4">
-            {transcriptMessages.length === 0 ? (
+            {realtimeAgent.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center text-white/50">
                 <MessageSquare className="mb-2 h-8 w-8" />
                 <p className="text-sm">No messages yet</p>
-                <p className="mt-1 text-xs">Hold the "Talk to AI" button to start</p>
+                <p className="mt-1 text-xs">
+                  {realtimeAgent.isConnected 
+                    ? "Start speaking to the AI agent" 
+                    : "Connecting to AI agent..."}
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
-                {transcriptMessages.map((msg) => (
+                {realtimeAgent.messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex flex-col ${msg.speaker === "user" ? "items-end" : "items-start"}`}
+                    className={`flex flex-col ${msg.type === "user" ? "items-end" : "items-start"}`}
                     data-testid={`transcript-message-${msg.id}`}
                   >
                     <span className="mb-1 text-xs text-white/50">
-                      {msg.speaker === "user" ? "You" : meeting?.agent?.name || "AI"}
+                      {msg.type === "user" ? "You" : meeting?.agent?.name || "AI"}
                     </span>
                     <div
                       className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
-                        msg.speaker === "user"
+                        msg.type === "user"
                           ? "bg-primary text-primary-foreground"
                           : "bg-white/10 text-white"
                       }`}
                     >
                       {msg.content}
+                      {!msg.isFinal && (
+                        <span className="ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-white/50" />
+                      )}
                     </div>
                   </div>
                 ))}
-                {isAiSpeaking && currentAiText && (
-                  <div className="flex flex-col items-start">
-                    <span className="mb-1 text-xs text-white/50">
-                      {meeting?.agent?.name || "AI"}
-                    </span>
-                    <div className="max-w-[90%] rounded-lg bg-white/10 px-3 py-2 text-sm text-white">
-                      {currentAiText}
-                      <span className="ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-white/50" />
-                    </div>
-                  </div>
-                )}
                 <div ref={transcriptEndRef} />
               </div>
             )}
